@@ -6,10 +6,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/lithammer/fuzzysearch/fuzzy"
 )
 
@@ -48,7 +50,7 @@ func initialModel() model {
 		}
 
 		if !info.IsDir() && filepath.Ext(path) == ".md" {
-			files = append(files, path)
+			files = append(files, strings.TrimSuffix(filepath.Base(path), filepath.Ext(filepath.Base(path))))
 		}
 
 		return nil
@@ -86,7 +88,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case tea.KeyEnter:
 				m.textInput.Blur()
 				root := filepath.Join(os.Getenv("Notes"), strings.Trim(m.textInput.Value(), " ")+".md")
-				m.all = append(m.all, root)
+				m.all = append(m.all, strings.Trim(m.textInput.Value(), " "))
 				m.choices = m.all
 				m.T1 = UNACTIVE
 				m.textInput.SetValue("")
@@ -208,6 +210,8 @@ func openEditor(a []string) tea.Cmd {
 	})
 }
 
+var ()
+
 func (m model) View() string {
 	// The header
 	if m.textInput.Focused() && m.T1 == INSERT {
@@ -216,8 +220,9 @@ func (m model) View() string {
 	if m.textInput.Focused() && m.T1 == SEARCH {
 		return fmt.Sprintf("How is the note named ?\n\n%s\n\n%s", m.textInput.View(), "(esc to quit)\n")
 	}
-	s := "What notes should i open?\n\n"
-
+	bar := lipgloss.NewStyle().Bold(true).Align(lipgloss.Left).Inline(true).Background(lipgloss.Color("#569C6C")).Foreground(lipgloss.Color("#F9D6CA"))
+	s := fmt.Sprintf("\n %s%s\n\n", bar.Render(" What notes should i open ? "), bar.Reverse(true).Foreground(lipgloss.NoColor{}).Render(" Deleted Drill "))
+	s += fmt.Sprintf(" %s \n\n", lipgloss.NewStyle().Foreground(lipgloss.Color("#B39393")).Render(strconv.Itoa(len(m.all))+" notes"))
 	// Iterate over our choices
 	for i, choice := range m.choices {
 
@@ -228,17 +233,17 @@ func (m model) View() string {
 		}
 
 		// Is this choice selected?
-		checked := " " // not selected
+		style := lipgloss.NewStyle().Foreground(lipgloss.NoColor{}) // not selected
 		if _, ok := m.selected[i]; ok {
-			checked = "x" // selected!
+			style.Foreground(lipgloss.Color("#FF6969")) // selected!
 		}
 
 		// Render the row
-		s += fmt.Sprintf("%s [%s] %s\n", cursor, checked, choice)
+		s += fmt.Sprintf("%s %s\n\n", lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6969")).Render(cursor), style.Render(choice))
 	}
 
 	// The footer
-	s += "\nPress q to quit.\n"
+	s += fmt.Sprintf("%s", lipgloss.NewStyle().Foreground(lipgloss.Color("#B39393")).Render("\nPress q to quit.\n"))
 	// Send the UI for rendering
 	return s
 }

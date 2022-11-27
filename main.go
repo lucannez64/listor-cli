@@ -29,6 +29,7 @@ type model struct {
 	textInput textinput.Model
 	err       error
 	T1        int64
+	status    string
 }
 
 func remove(slice []string, s int) []string {
@@ -70,6 +71,7 @@ func initialModel() model {
 		// of the `choices` slice, above.
 		selected: make(map[int]struct{}),
 		T1:       UNACTIVE,
+		status:   "",
 	}
 }
 
@@ -91,6 +93,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.all = append(m.all, strings.Trim(m.textInput.Value(), " "))
 				m.choices = m.all
 				m.T1 = UNACTIVE
+				os.Create(root)
+				m.status = fmt.Sprintf("Added %s", strings.Trim(m.textInput.Value(), " "))
 				m.textInput.SetValue("")
 				return m, openEditor([]string{root})
 			case tea.KeyEsc, tea.KeyCtrlC:
@@ -152,9 +156,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "d", "delete":
-
-			for i := range m.selected {
-				m.all = remove(m.all, i)
+			m.status = "Deleted "
+			if len(m.selected) == 0 {
+				os.Remove(filepath.Join(os.Getenv("Notes"), m.all[m.cursor]+".md"))
+				m.status += m.all[m.cursor]
+				m.all = remove(m.all, m.cursor)
+			} else {
+				for i := range m.selected {
+					os.Remove(filepath.Join(os.Getenv("Notes"), m.all[i]+".md"))
+					m.status += m.all[i] + " "
+					m.all = remove(m.all, i)
+				}
 			}
 
 			m.choices = m.all
@@ -220,8 +232,13 @@ func (m model) View() string {
 	if m.textInput.Focused() && m.T1 == SEARCH {
 		return fmt.Sprintf("How is the note named ?\n\n%s\n\n%s", m.textInput.View(), "(esc to quit)\n")
 	}
+	var s string
 	bar := lipgloss.NewStyle().Bold(true).Align(lipgloss.Left).Inline(true).Background(lipgloss.Color("#569C6C")).Foreground(lipgloss.Color("#F9D6CA"))
-	s := fmt.Sprintf("\n %s%s\n\n", bar.Render(" What notes should i open ? "), bar.Reverse(true).Foreground(lipgloss.NoColor{}).Render(" Deleted Drill "))
+	if m.status == "" {
+		s = fmt.Sprintf("\n %s\n\n", bar.Render(" What notes should i open ? "))
+	} else {
+		s = fmt.Sprintf("\n %s%s\n\n", bar.Render(" What notes should i open ? "), bar.Reverse(true).Foreground(lipgloss.NoColor{}).Render(" "+m.status+" "))
+	}
 	s += fmt.Sprintf(" %s \n\n", lipgloss.NewStyle().Foreground(lipgloss.Color("#B39393")).Render(strconv.Itoa(len(m.all))+" notes"))
 	// Iterate over our choices
 	for i, choice := range m.choices {
@@ -239,7 +256,7 @@ func (m model) View() string {
 		}
 
 		// Render the row
-		s += fmt.Sprintf("%s %s\n\n", lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6969")).Render(cursor), style.Render(choice))
+		s += fmt.Sprintf("%s %s\n", lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6969")).Render(cursor), style.Render(choice))
 	}
 
 	// The footer
